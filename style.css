@@ -1,0 +1,46 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+:root {
+  --ink: #17181c;
+  --body: #3b3e46;
+  --muted: #71757f;
+  --line: #e4e6ea;
+  --accent: #2f5bea;
+}
+
+html, body, .stApp, [class*="st-"], button, input, textarea {
+  font-family: "Pretendard", -apple-system, "Malgun Gothic", sans-serif;
+}
+
+/* 1단계: 앱 이름 */
+.hero { font-size: 2.5rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; color: var(--ink); padding: 0; margin: 0 0 .5rem; }
+
+/* 2단계: 소개 */
+.lead { font-size: 1.2rem; font-weight: 500; line-height: 1.5; color: var(--body); margin: 0 0 1.25rem; }
+
+/* 지금 읽을 문장은 화면의 초점 */
+.script { font-size: 1.6rem; font-weight: 700; line-height: 1.45; letter-spacing: -0.01em; color: var(--ink); margin: 1rem 0; }
+
+/* 3단계: 구역 이름 */
+.eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .02em; color: var(--muted); margin: 1.25rem 0 .4rem; }
+
+/* 모델 귀속 안내 */
+.tuned { font-size: .9rem; line-height: 1.6; color: var(--body); border-left: 3px solid var(--accent); padding: .1rem 0 .1rem .8rem; margin: 0 0 1.25rem; }
+.tuned b { color: var(--ink); font-weight: 700; }
+
+/* 탭은 단계 표시 */
+.stTabs [data-baseweb="tab"] p { font-size: 1rem; font-weight: 600; }
+
+/* 수치 */
+[data-testid="stMetricLabel"] p { font-size: .8rem; font-weight: 600; color: var(--muted); }
+[data-testid="stMetricValue"] { font-size: 1.6rem; font-weight: 700; color: var(--ink); }
+[data-testid="stSidebar"] [data-testid="stMetricValue"] { font-size: 1.25rem; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ink: #f3f4f6; --body: #c9ccd3; --muted: #9a9ea8; --line: #33363d; --accent: #7c9bff; }
+}
+
+@media (max-width: 640px) {
+  .hero { font-size: 2rem; }
+  .script { font-size: 1.35rem; }
+}

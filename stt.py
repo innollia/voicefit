@@ -65,6 +65,15 @@ def can_record():
     return bool(api_key() or groq_key())
 
 
+def stt_model():
+    """지금 녹음을 받아 적는 모델 이름. 없으면 None."""
+    if api_key():
+        return "Gemini " + _setting("GEMINI_MODEL", "gemini-2.5-flash")
+    if groq_key():
+        return "Groq " + _setting("GROQ_MODEL", "whisper-large-v3")
+    return None
+
+
 def groq_key():
     return _setting("GROQ_API_KEY") or _setting("GROQ__CHUNGHO208")
 

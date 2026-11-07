@@ -4,6 +4,7 @@ from difflib import SequenceMatcher
 
 MIN_COUNT = 2      # 같은 오류가 이만큼 반복돼야 규칙이 된다
 MIN_SHARE = 0.8    # 그 표기가 나왔을 때 이 비율 이상 틀려야 고친다
+DEMO_MODEL = "예시 데이터"
 PUNCT = ".,!?~\"'…"
 
 
@@ -33,8 +34,14 @@ def _core(wrong, right):
     return (wrong[:-n], right[:-n]) if n else (wrong, right)
 
 
-def new_profile():
-    return {"errors": {}, "kept": {}, "sentences": 0}
+def new_profile(model=None):
+    """프로필은 학습에 쓴 인식 모델 하나에만 맞는다."""
+    return {"errors": {}, "kept": {}, "sentences": 0, "model": model}
+
+
+def fits(profile, model):
+    """비어 있거나 같은 모델로 학습한 프로필만 쓸 수 있다."""
+    return profile["sentences"] == 0 or profile.get("model") in (model, DEMO_MODEL)
 
 
 def learn(profile, ref, hyp):

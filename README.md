@@ -6,6 +6,8 @@ Secrets 또는 환경 변수에 `SCHOOL_GEMINI_API_KEY`를 넣으면 녹음 인�
 
 선택 값: `AI_PROVIDER`(`claude` 또는 `gemini`, 없으면 학교 Gemini 다음 Claude), `GEMINI_MODEL`, `CLAUDE_MODEL`(기본 `claude-sonnet-5-5`), `VOICEFIT_DAILY_CALLS`(기본 300).
 
+프로필은 학습에 쓴 인식 모델에 묶입니다. 다른 모델에서는 규칙을 적용하지 않고 다시 학습을 안내합니다.
+
 ```powershell
 pip install -r requirements.txt
 streamlit run app.py

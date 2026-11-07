@@ -96,6 +96,15 @@ def test_claude_polish_uses_messages_api(monkeypatch):
     assert seen == {"url": "https://api.anthropic.com/v1/messages", "model": "m"}
 
 
+def test_profile_is_bound_to_its_model():
+    p = core.new_profile("A")
+    assert core.fits(p, "B")
+    core.learn(p, "회의가 있다", "외의가 있다")
+    assert core.fits(p, "A") and not core.fits(p, "B")
+    p["model"] = core.DEMO_MODEL
+    assert core.fits(p, "B")
+
+
 def test_no_key_refuses(monkeypatch):
     with pytest.raises(stt.Unavailable):
         stt.transcribe(b"x")

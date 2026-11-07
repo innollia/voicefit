@@ -8,69 +8,117 @@
   #count { font-size: .85rem; font-weight: 700; opacity: .65; min-height: 1.2em; }
   #sentence { font-size: 1.6rem; font-weight: 700; line-height: 1.45; letter-spacing: -.01em; margin: .4rem 0 1rem; min-height: 2.3em; }
   #sentence:empty { display: none; }
-  button { font: inherit; font-weight: 700; font-size: 1rem; padding: .7rem 1.2rem; border-radius: 8px; border: 1px solid #c9ccd3; background: transparent; color: inherit; cursor: pointer; }
+  button { font: inherit; font-weight: 700; font-size: 1rem; padding: .7rem 1.2rem; margin: 0 .3rem .3rem 0; border-radius: 8px; border: 1px solid #c9ccd3; background: transparent; color: inherit; cursor: pointer; }
   #main { background: #2f5bea; border-color: #2f5bea; color: #fff; }
   #main.on { background: #d33a3a; border-color: #d33a3a; }
-  #note { font-size: .9rem; margin-top: .6rem; min-height: 1.3em; opacity: .75; }
+  button[hidden] { display: none; }
+  #note { font-size: .9rem; margin-top: .4rem; min-height: 1.3em; opacity: .75; }
 </style>
 </head>
 <body>
 <div id="count"></div>
 <div id="sentence"></div>
 <button id="main">녹음 시작</button>
+<button id="again" hidden>이 문장 다시</button>
+<button id="back" hidden>앞 문장 NG</button>
+<button id="stop" hidden>쉬기</button>
 <div id="note"></div>
 <script>
+const TAIL = 700;          // 단추를 누른 뒤에도 이만큼 더 녹음해 끝 글자가 잘리지 않게 한다
+const VOICE_MS = 300;      // 이보다 말소리가 짧으면 말하지 않은 것으로 본다
 const $ = id => document.getElementById(id);
 const post = (type, data) => window.parent.postMessage({isStreamlitMessage: true, type, ...data}, "*");
 let args = {left: null, ack: null, total: 0};
-let stream = null, rec = null, ref = null;
-let nextId = Date.now();
-const queue = [], inflight = new Map();   // id → 보낸 문장
-let waiting = null;
+let stream = null, meter = null;
+let cur = null;               // 지금 녹음 중인 것
+let held = null;              // 방금 끝낸 것. 다음 것을 끝낼 때까지 보내지 않아 NG할 수 있다
+const live = new Set();       // 아직 소리를 받는 것 (끝 여유 포함)
+const queue = [], inflight = new Map();   // id → 문장
+let nextId = Date.now(), waiting = null, notice = "", noticeTimer = null;
 
 function pending() {
   const taken = new Set(inflight.values());
   return args.left === null ? [null] : args.left.filter(t => !taken.has(t));
 }
 
-function draw() {
-  const on = rec !== null, free = args.left === null;
-  const rest = pending();
-  const text = on ? ref : rest[0];
-  $("sentence").textContent = text || "";
-  $("count").textContent = !free && text ? `${args.total - args.left.length + inflight.size + (on ? 0 : 1)} / ${args.total}` : "";
-  const done = !free && !on && !rest.length;
-  $("main").textContent = done ? "모두 읽었습니다" : on ? (free ? "끄기" : !rest.length ? "끝내기" : "끄고 다음 문장") : "녹음 시작";
-  $("main").disabled = done;
-  $("main").className = on ? "on" : "";
-  $("note").textContent = on ? "녹음 중입니다" : "";
-  post("streamlit:setFrameHeight", {height: document.body.scrollHeight + 8});
-}
-
-async function start() {
-  if (!stream) stream = await navigator.mediaDevices.getUserMedia({audio: true});
-  const rest = pending();
-  if (!rest.length) return;
-  ref = rest[0];
-  const id = nextId++, parts = [], current = new MediaRecorder(stream), said = ref;
-  if (said !== null) inflight.set(id, said);
-  current.ondataavailable = e => parts.push(e.data);
-  current.onstop = () => upload(id, said, new Blob(parts, {type: current.mimeType}));
-  rec = current;
-  rec.start();
+function say(text) {
+  notice = text;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { notice = ""; draw(); }, 5000);
   draw();
 }
 
-function finish() {
-  const current = rec;
-  rec = null;
-  current.stop();
+function draw() {
+  const on = cur !== null, free = args.left === null;
+  const rest = pending();
+  const text = on ? cur.ref : rest[0];
+  $("sentence").textContent = text || "";
+  $("count").textContent = !free && text ? `${args.total - args.left.length + inflight.size + (on ? 0 : 1)} / ${args.total}` : "";
+  const done = !free && !on && !rest.length;
+  $("main").textContent = done ? "모두 읽었습니다" : on ? (!rest.length ? "끝내기" : free ? "끄고 다음 녹음" : "끄고 다음 문장") : "녹음 시작";
+  $("main").disabled = done;
+  $("main").className = on ? "on" : "";
+  $("again").hidden = !on;
+  $("back").hidden = !on || !held;
+  $("stop").hidden = !on;
+  $("note").textContent = notice || (on ? "녹음 중입니다" : "");
+  post("streamlit:setFrameHeight", {height: document.body.scrollHeight + 8});
 }
 
-function upload(id, said, blob) {
+async function ready() {
+  if (stream) return;
+  stream = await navigator.mediaDevices.getUserMedia({audio: true});
+  const ctx = new AudioContext(), node = ctx.createAnalyser(), buf = new Float32Array(1024);
+  node.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(node);
+  meter = setInterval(() => {
+    node.getFloatTimeDomainData(buf);
+    const rms = Math.sqrt(buf.reduce((s, x) => s + x * x, 0) / buf.length);
+    if (rms > 0.02) live.forEach(t => { t.voiced += 100; });
+  }, 100);
+}
+
+async function start(ref) {
+  await ready();
+  if (ref === undefined) {
+    const rest = pending();
+    if (!rest.length) return;
+    ref = rest[0];
+  }
+  const t = {id: nextId++, ref, voiced: 0, parts: [], drop: false, recorder: new MediaRecorder(stream)};
+  if (ref !== null) inflight.set(t.id, ref);
+  t.recorder.ondataavailable = e => t.parts.push(e.data);
+  t.done = new Promise(ok => { t.recorder.onstop = ok; });
+  live.add(t);
+  t.recorder.start();
+  cur = t;
+  draw();
+}
+
+// 녹음을 끝낸다. 끝 글자를 위해 조금 더 받은 뒤 멈춘다.
+function end(t, now) {
+  setTimeout(() => { live.delete(t); t.recorder.stop(); }, now ? 0 : TAIL);
+}
+
+function discard(t) {
+  t.drop = true;
+  inflight.delete(t.id);
+  end(t, true);
+}
+
+// 보내도 되는 녹음을 보낸다. 말소리가 없으면 보내지 않고 그 문장을 다시 읽게 둔다.
+async function release(t) {
+  await t.done;
+  if (t.drop) return;
+  if (t.voiced < VOICE_MS) {
+    inflight.delete(t.id);
+    say(t.ref ? "말소리가 없는 녹음은 빼고, 그 문장을 다시 보여 드립니다." : "말소리가 없어 보내지 않았습니다.");
+    return;
+  }
+  const blob = new Blob(t.parts, {type: t.recorder.mimeType});
   const reader = new FileReader();
   reader.onload = () => {
-    queue.push({id, ref: said, mime: blob.type.split(";")[0], audio: reader.result.split(",")[1]});
+    queue.push({id: t.id, ref: t.ref, mime: blob.type.split(";")[0], audio: reader.result.split(",")[1]});
     pump();
   };
   reader.readAsDataURL(blob);
@@ -84,14 +132,61 @@ function pump() {
   post("streamlit:setComponentValue", {dataType: "json", value: item});
 }
 
-$("main").onclick = async () => {
+function pause() {
+  if (held) release(held);
+  held = null;
+  if (cur) { end(cur); release(cur); }
+  cur = null;
+  draw();
+}
+
+// 탭을 옮기거나 창을 가리면 녹음을 끈다. 읽다 만 문장은 보내지 않는다.
+function hidden() {
   try {
-    if (rec) { finish(); if (args.left !== null && pending().length) await start(); else draw(); }
-    else await start();
-  } catch (e) {
-    $("note").textContent = "마이크를 쓸 수 없습니다. 브라우저에서 마이크를 허용해 주세요.";
-  }
+    const box = window.frameElement;
+    if (box) return box.checkVisibility ? !box.checkVisibility() : box.offsetParent === null;
+  } catch (e) {}
+  return window.innerWidth === 0 || window.innerHeight === 0;
+}
+function leave() {
+  if (!cur) return;
+  discard(cur);
+  cur = null;
+  pause();
+  say("화면을 옮겨서 녹음을 껐습니다. 읽던 문장부터 다시 하시면 됩니다.");
+}
+setInterval(() => { if (cur && hidden()) leave(); }, 300);
+document.addEventListener("visibilitychange", () => { if (document.hidden) leave(); });
+
+const guard = fn => async () => {
+  try { await fn(); }
+  catch (e) { say("마이크를 쓸 수 없습니다. 브라우저에서 마이크를 허용해 주세요."); }
 };
+
+$("main").onclick = guard(async () => {
+  if (!cur) return start();
+  if (held) release(held);
+  held = cur;
+  end(cur);
+  cur = null;
+  if (pending().length) await start();
+  else pause();
+});
+$("again").onclick = guard(async () => {
+  const ref = cur.ref;
+  discard(cur);
+  cur = null;
+  await start(ref);
+});
+$("back").onclick = guard(async () => {
+  const ref = held.ref;
+  discard(held);
+  discard(cur);
+  held = cur = null;
+  await start(ref);
+  say("앞 녹음을 지웠습니다. 다시 읽어 주세요.");
+});
+$("stop").onclick = pause;
 
 window.addEventListener("message", e => {
   if (e.data.type !== "streamlit:render") return;

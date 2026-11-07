@@ -195,11 +195,11 @@ if not has_key:
     st.warning("이 주소에는 AI 키가 없어 녹음 인식이 꺼져 있습니다. "
                "오른쪽 위 ⋮ 메뉴의 **예시 데이터로 체험**을 누르면 학습, 효과 확인, 보정을 그대로 볼 수 있습니다.")
 
+agreed = has_key and st.checkbox("녹음한 음성을 인식을 위해 외부 AI 서비스로 보내는 데 동의합니다.", key="agree")
 learn_tab, eval_tab, use_tab = st.tabs(["1. 내 발음 학습", "2. 효과 확인", "3. 써 보기"])
 
 with learn_tab:
     if has_key:
-        agreed = st.checkbox("녹음한 음성을 인식을 위해 외부 AI 서비스로 보내는 데 동의합니다.")
         if not s.cal_left and not s.jobs:
             st.success("준비한 문장을 모두 읽었습니다. 효과 확인으로 넘어가 주세요.")
         elif agreed and usable:
@@ -223,7 +223,7 @@ with learn_tab:
 with eval_tab:
     st.write("학습에 쓰지 않은 문장으로 비교합니다. 멀쩡한 문장을 망친 경우도 함께 셉니다.")
     if has_key and s.eval_left:
-        if st.checkbox("녹음을 외부 AI 서비스로 보내는 데 동의합니다.", key="eval_ok"):
+        if agreed:
             recorder("eval", s.eval_left)
 
     @live
@@ -254,7 +254,10 @@ with eval_tab:
 with use_tab:
     if has_key:
         st.write("아무 말이나 녹음해 보세요. 처리되는 동안 계속 녹음할 수 있습니다.")
-        recorder("free")
+        if agreed:
+            recorder("free")
+        else:
+            st.caption("위의 동의에 체크하면 녹음할 수 있습니다.")
 
         @live
         def free_result():

@@ -25,6 +25,7 @@ s.setdefault("eval_left", list(data.EVALUATION))
 s.setdefault("acks", {})         # 녹음기에 받았다고 답한 마지막 번호
 s.setdefault("jobs", [])        # 뒤에서 받아 적는 중인 녹음
 s.setdefault("free_rows", [])
+s.setdefault("cal_log", [])     # 학습에 쓴 (대본, 인식)
 s.setdefault("seen", set())
 has_key = stt.can_record()
 st.markdown(f"<style>{(Path(__file__).parent / 'style.css').read_text(encoding='utf8')}</style>",
@@ -38,7 +39,7 @@ def label(text):
 def reset_profile():
     s.profile, s.eval_pairs, s.eval_ai = core.new_profile(model), [], []
     s.cal_left, s.eval_left = list(data.CALIBRATION), list(data.EVALUATION)
-    s.jobs, s.free_rows = [], []
+    s.jobs, s.free_rows, s.cal_log = [], [], []
     s.demo = False
 
 
@@ -50,7 +51,8 @@ def workers():
 def recorder(kind, left=None):
     """녹음은 브라우저에서 이어지고, 받은 녹음은 뒤에서 받아 적는다. 파일로 저장하지 않는다."""
     total = len(data.EVALUATION if kind == "eval" else data.CALIBRATION)
-    got = recorder_ui(left=left, ack=s.acks.get(kind), total=total, key=f"rec_{kind}", default=None)
+    got = recorder_ui(left=left, ack=s.acks.get(kind), total=total, next_tab=1 if kind == "cal" else None,
+                      key=f"rec_{kind}", default=None)
     if not got or got["id"] == s.acks.get(kind):
         return
     s.acks[kind] = got["id"]
@@ -108,12 +110,21 @@ def drain():
             if s.profile.get("model") != model:  # 예시 데이터와 섞지 않는다
                 s.profile, s.demo = core.new_profile(model), False
             core.learn(s.profile, ref, result)
-            s.last = result
+            s.cal_log.append((ref, result))
         elif kind == "eval":
             s.eval_pairs.append((ref, result[0]))
             s.eval_ai.append(result[1])
         else:
             s.free_rows.insert(0, result)
+
+
+def drop_learned(i):
+    """잘못 읽은 문장을 학습에서 빼고 다시 읽을 차례로 돌린다."""
+    ref, _ = s.cal_log.pop(i)
+    s.profile = core.new_profile(model)
+    for r, h in s.cal_log:
+        core.learn(s.profile, r, h)
+    s.cal_left.insert(0, ref)
 
 
 def status():
@@ -209,14 +220,29 @@ with learn_tab:
     def learn_result():
         drain()
         status()
-        if s.get("last"):
-            st.caption(f"방금 인식: {s.last}")
-        rules = core.rules(current())
+        p = current()
+        rules = core.rules(p)
         label("찾아낸 내 오류")
         if rules:
             st.table([{"이렇게 인식되면": w, "이렇게 고칩니다": r} for w, r in rules.items()])
         else:
-            st.write("같은 오류가 두 번 넘게 반복되면 여기에 나타납니다.")
+            seen = sum(sum(v.values()) for v in p["errors"].values())
+            st.write("아직 없습니다. 같은 단어가 같은 글자로 두 번 넘게 틀려야 규칙이 됩니다.")
+            if p["sentences"]:
+                st.caption(f"지금까지 단어가 다른 단어로 인식된 곳 {seen}곳, 같은 오류가 반복된 곳 "
+                           f"{sum(max(v.values()) >= core.MIN_COUNT for v in p['errors'].values())}곳")
+        if s.cal_log:
+            label(f"학습한 문장 {len(s.cal_log)}개")
+            for i in range(len(s.cal_log) - 1, max(-1, len(s.cal_log) - 6), -1):
+                ref, hyp = s.cal_log[i]
+                text, ng = st.columns([12, 1], vertical_alignment="center")
+                same = "" if core.cer(ref, hyp) == 0 else "  \n:red[" + hyp + "]"
+                text.markdown(f"{ref}{same}")
+                if ng.button("✕", key=f"ng{i}_{len(s.cal_log)}", help="이 문장을 학습에서 빼고 다시 읽기"):
+                    drop_learned(i)
+                    st.rerun()
+            if len(s.cal_log) > 5:
+                st.caption("최근 5개만 보입니다. 빨간 줄은 대본과 다르게 인식된 문장입니다.")
 
     learn_result()
 

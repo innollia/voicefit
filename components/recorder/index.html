@@ -18,10 +18,10 @@
 <body>
 <div id="count"></div>
 <div id="sentence"></div>
-<button id="main">녹음 시작</button>
-<button id="again" hidden>이 문장 다시</button>
-<button id="back" hidden>앞 문장 NG</button>
-<button id="stop" hidden>쉬기</button>
+<button id="main">● 녹음</button>
+<button id="again" hidden title="이 문장 다시">↺</button>
+<button id="back" hidden title="앞 문장 NG, 다시 읽기">← NG</button>
+<button id="stop" hidden title="쉬기">⏸</button>
 <div id="note"></div>
 <script>
 const TAIL = 700;          // 단추를 누른 뒤에도 이만큼 더 녹음해 끝 글자가 잘리지 않게 한다
@@ -55,7 +55,7 @@ function draw() {
   $("sentence").textContent = text || "";
   $("count").textContent = !free && text ? `${args.total - args.left.length + inflight.size + (on ? 0 : 1)} / ${args.total}` : "";
   const done = !free && !on && !rest.length;
-  $("main").textContent = done ? "모두 읽었습니다" : on ? (!rest.length ? "끝내기" : free ? "끄고 다음 녹음" : "끄고 다음 문장") : "녹음 시작";
+  $("main").textContent = done ? "✓ 끝" : on ? (!rest.length ? "✓ 끝내기" : "다음 →") : "● 녹음";
   $("main").disabled = done;
   $("main").className = on ? "on" : "";
   $("again").hidden = !on;
@@ -170,7 +170,12 @@ $("main").onclick = guard(async () => {
   end(cur);
   cur = null;
   if (pending().length) await start();
-  else pause();
+  else {
+    pause();
+    if (args.next_tab != null) {   // 다 읽으면 다음 탭으로 넘긴다
+      try { window.parent.document.querySelectorAll('[role="tab"]')[args.next_tab].click(); } catch (e) {}
+    }
+  }
 });
 $("again").onclick = guard(async () => {
   const ref = cur.ref;

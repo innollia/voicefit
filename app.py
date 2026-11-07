@@ -41,7 +41,7 @@ def load_demo():
 
 
 st.title("내 목소리 맞춤 인식")
-st.write("대본을 읽으면 내 발음에서 반복되는 인식 오류를 찾아, 다음 인식부터 고쳐 줍니다.")
+st.write("편하게 말씀하세요. 당신의 말투에 꼭 맞는 음성인식을 만들어 드립니다.")
 
 with st.sidebar:
     st.subheader("내 프로필")

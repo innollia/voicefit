@@ -156,12 +156,13 @@ def transcribe(audio, mime="audio/wav"):
 
 
 def polish(text, active_rules):
-    """규칙을 근거로 문맥이 분명한 곳만 고친다. 모호하면 그대로 둔다."""
-    listing = "\n".join(f"{w} → {r}" for w, r in active_rules.items())
+    """잘못 들은 것이 문맥상 분명한 곳만 고친다. 규칙이 없어도 동작하고, 모호하면 그대로 둔다."""
+    listing = "\n".join(f"{w} → {r}" for w, r in active_rules.items()) or "(아직 없음)"
     prompt = (
         "다음은 한 사람의 음성 인식 결과와, 그 사람에게 반복되는 오류 목록이다. "
-        "목록에 있는 오류이고 문맥상 확실할 때만 고쳐라. 조금이라도 모호하면 그대로 둬라. "
-        "새 내용을 더하거나 다듬지 마라. 문장만 출력하라.\n\n"
+        "목록의 오류와, 목록에 없어도 비슷한 발음을 잘못 받아 적은 것이 문맥상 확실한 곳만 고쳐라. "
+        "조금이라도 모호하면 그대로 둬라. 말투, 어순, 띄어쓰기를 다듬거나 새 내용을 더하지 마라. "
+        "문장만 출력하라.\n\n"
         f"오류 목록:\n{listing}\n\n문장: {text}")
     if provider() == "claude":
         return _claude(prompt)

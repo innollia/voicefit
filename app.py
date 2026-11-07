@@ -10,7 +10,8 @@ import stt
 
 st.set_page_config(page_title="내 목소리 맞춤 인식", page_icon="🎙️", layout="centered")
 s = st.session_state
-model = stt.stt_model()
+EXAMPLE = "내일 외의는 하교에서 합니다."
+model =stt.stt_model()
 s.setdefault("profile", core.new_profile(model))
 s.setdefault("eval_pairs", [])
 s.setdefault("cal_i", 0)
@@ -49,6 +50,19 @@ def recognise(clip):
         return stt.transcribe(*clip)
     except stt.Unavailable as e:
         st.error(str(e))
+
+
+def ai_fix(text, rules):
+    """같은 입력으로 다시 호출하지 않는다. 화면이 다시 그려져도 사용량이 늘지 않는다."""
+    key = (text, tuple(sorted(rules.items())))
+    if s.get("ai_key") != key:
+        try:
+            s.ai_text = stt.polish(text, rules)
+        except stt.Unavailable as e:
+            st.error(str(e))
+            return text
+        s.ai_key = key
+    return s.ai_text
 
 
 def load_demo():
@@ -157,9 +171,9 @@ with use_tab:
         if clip is not None and s.get("free_id") != clip.file_id:
             s.free_id = clip.file_id
             s.free_text = recognise((clip.getvalue(), clip.type or "audio/wav")) or ""
-        text = st.text_input("인식 결과 (직접 고쳐 넣어도 됩니다)", s.get("free_text", "내일 외의는 하교에서 합니다."))
+        text = st.text_input("인식 결과 (직접 고쳐 넣어도 됩니다)", s.get("free_text", ""))
     else:
-        text = st.text_input("인식된 문장을 넣어 보세요", "내일 외의는 하교에서 합니다.")
+        text = st.text_input("인식된 문장을 넣어 보세요", EXAMPLE)
     if text:
         fixed, changes = core.correct(profile, text)
         left, right = st.columns(2)
@@ -175,8 +189,6 @@ with use_tab:
             st.caption("확실한 오류가 없어 그대로 두었습니다.")
         else:
             st.caption("아직 프로필이 비어 있습니다.")
-        if stt.provider() and core.rules(profile) and st.button("AI로 문맥까지 확인"):
-            try:
-                st.write(stt.polish(fixed, core.rules(profile)))
-            except stt.Unavailable as e:
-                st.error(str(e))
+        if stt.provider() and text != EXAMPLE:
+            label("AI 문맥 보정")
+            st.write(ai_fix(fixed, core.rules(profile)))

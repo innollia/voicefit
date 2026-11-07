@@ -74,7 +74,7 @@ def eval_job(audio, mime, snapshot):
     ai = None
     if stt.provider():
         try:
-            ai = stt.polish(fixed, core.rules(snapshot), core.habits(snapshot))
+            ai = core.guard(fixed, stt.polish(fixed, core.rules(snapshot), core.habits(snapshot)))
         except stt.Unavailable:
             pass
     return raw, ai
@@ -86,7 +86,7 @@ def free_job(audio, mime, snapshot):
     row = {"일반 인식": raw, "내 프로필로 보정": fixed}
     if stt.provider():
         try:
-            row["AI 문맥 보정"] = stt.polish(fixed, core.rules(snapshot), core.habits(snapshot))
+            row["AI 문맥 보정"] = core.guard(fixed, stt.polish(fixed, core.rules(snapshot), core.habits(snapshot)))
         except stt.Unavailable:
             row["AI 문맥 보정"] = fixed
     return row
@@ -146,7 +146,7 @@ def ai_fix(text, rules):
     key = (text, tuple(sorted(rules.items())))
     if s.get("ai_key") != key:
         try:
-            s.ai_text = stt.polish(text, rules, core.habits(current()))
+            s.ai_text = core.guard(text, stt.polish(text, rules, core.habits(current())))
         except stt.Unavailable as e:
             st.error(str(e))
             return text
@@ -280,7 +280,16 @@ with eval_tab:
             rows = [{k: x[k] for k in ("대본", "일반 인식", "보정 결과")} for x in r["rows"]]
             for row, x in zip(rows, s.eval_ai):
                 row["AI 보정"] = x or ""
-            st.dataframe(rows, use_container_width=True, hide_index=True)
+            pick = st.dataframe(rows, use_container_width=True, hide_index=True,
+                                on_select="rerun", selection_mode="multi-row", key=f"evt{len(rows)}")
+            chosen = sorted(pick.selection.rows, reverse=True)
+            if chosen and st.button(f"✕ 잘못 읽은 {len(chosen)}문장 빼기", help="빼고 다시 읽을 차례로 돌립니다"):
+                for i in chosen:
+                    ref, _ = s.eval_pairs.pop(i)
+                    s.eval_ai.pop(i)
+                    s.eval_left.insert(0, ref)
+                st.rerun()
+            st.caption("대본과 다르게 읽은 줄은 눌러 고른 뒤 빼면 수치에서 빠집니다.")
 
     eval_result()
 

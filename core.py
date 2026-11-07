@@ -9,7 +9,7 @@ PUNCT = ".,!?~\"'…"
 
 
 def tokens(text):
-    return re.sub(f"[{PUNCT}]", " ", text).split()
+    return re.sub(r"[^\w\s]", " ", text).split()   # 문장부호는 어떤 것이든 평가에서 뺀다
 
 
 def cer(ref, hyp):
@@ -62,13 +62,47 @@ def learn(profile, ref, hyp):
 def rules(profile):
     """반복되고 모호하지 않은 오류만 규칙으로 쓴다."""
     out = {}
+    known = {(p, x, y) for p, x, y, _ in habits(profile)}
     for wrong, targets in profile["errors"].items():
         right, count = max(targets.items(), key=lambda x: x[1])
         kept = sum(n for t, n in profile["kept"].items() if t.startswith(wrong))
         total = sum(targets.values()) + kept
-        if count >= MIN_COUNT and count / total >= MIN_SHARE:
+        if count / total < MIN_SHARE:
+            continue
+        # 한 번만 나온 오류도, 여러 단어에서 확인된 발음 습관으로 설명되면 규칙으로 쓴다
+        if count >= MIN_COUNT or (kept == 0 and len(wrong) >= 2 and _by_habit(wrong, right, known)):
             out[wrong] = right
     return out
+
+
+def _changes(right, wrong):
+    if len(right) != len(wrong):
+        return None
+    out = set()
+    for a, b in zip(right, wrong):
+        ja, jb = jamo(a), jamo(b)
+        if ja == jb:
+            continue
+        if not ja or not jb:
+            return None
+        out |= {(p, x, y) for p, x, y in zip(PART, ja, jb) if x != y}
+    return out
+
+
+def _by_habit(wrong, right, known):
+    ch = _changes(right, wrong)
+    return bool(ch) and ch <= known
+
+
+def guard(before, after, limit=0.34):
+    """AI 결과가 비었거나 원래 문장과 너무 다르면 버리고 원래 문장을 쓴다."""
+    text = (after or "").strip().splitlines()
+    text = text[0].strip().strip("\"'“”‘’") if text else ""
+    if text.startswith("문장:"):
+        text = text[3:].strip()
+    if not text or cer(before, text) > limit:
+        return before
+    return text
 
 
 def correct(profile, text):

@@ -139,3 +139,17 @@ def test_habit_needs_two_different_words():
 def test_scripts_vary_endings():
     ends = {s.rstrip(".?!")[-1] for s in data.CALIBRATION}
     assert len(ends) >= 8 and sum(s.endswith("?") for s in data.CALIBRATION) >= 4
+
+
+def test_single_error_explained_by_habit_becomes_rule():
+    p = core.new_profile("A")
+    core.learn(p, "회의 간다", "외의 간다")
+    core.learn(p, "학교 간다", "악교 간다")
+    core.learn(p, "오후 간다", "오우 간다")
+    assert core.rules(p).get("오우") == "오후"
+
+
+def test_empty_or_wild_ai_falls_back():
+    assert core.guard("오늘 회의", "") == "오늘 회의"
+    assert core.guard("오늘 회의", "전혀 다른 긴 문장을 지어냈다") == "오늘 회의"
+    assert core.guard("오늘 외의", "문장: 오늘 회의") == "오늘 회의"

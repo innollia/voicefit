@@ -4,12 +4,14 @@ import datetime
 import json
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 import requests
 
 POOL = Path.home() / ".all-tomorrow" / "key-pool.env"
 COUNTER = Path(tempfile.gettempdir()) / "voicefit_calls.json"
+COUNTER_LOCK = threading.Lock()
 PROMPT = ("이 한국어 음성을 들리는 그대로 받아 적어라. 맞춤법이나 문맥으로 고치지 말고, "
           "들린 발음에 가장 가까운 표기로 적어라. 받아 적은 문장만 출력하라.")
 
@@ -83,15 +85,17 @@ def daily_limit():
 
 
 def _count_call():
+    """녹음을 동시에 처리하므로 한 번에 하나씩 센다."""
     today = datetime.date.today().isoformat()
-    try:
-        data = json.loads(COUNTER.read_text())
-    except (OSError, ValueError):
-        data = {}
-    used = data.get(today, 0)
-    if used >= daily_limit():
-        raise Unavailable("오늘 사용 한도를 다 썼습니다. 내일 다시 쓸 수 있고, 예시 데이터 체험은 계속됩니다.")
-    COUNTER.write_text(json.dumps({today: used + 1}))
+    with COUNTER_LOCK:
+        try:
+            data = json.loads(COUNTER.read_text())
+        except (OSError, ValueError):
+            data = {}
+        used = data.get(today, 0)
+        if used >= daily_limit():
+            raise Unavailable("오늘 사용 한도를 다 썼습니다. 내일 다시 쓸 수 있고, 예시 데이터 체험은 계속됩니다.")
+        COUNTER.write_text(json.dumps({today: used + 1}))
 
 
 def _generate(parts):

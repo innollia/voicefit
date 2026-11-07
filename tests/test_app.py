@@ -123,6 +123,6 @@ def test_app_without_key_shows_guide_and_demo(monkeypatch):
     monkeypatch.delenv("SCHOOL_GEMINI_API_KEY", raising=False)
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
     assert not at.exception and "AI 키" in at.warning[0].value
-    at.sidebar.button[0].click().run()
+    at.button(key="demo_btn").click().run()
     assert not at.exception
     assert any(m.label == "좋아진 문장" and m.value != "0" for m in at.metric)

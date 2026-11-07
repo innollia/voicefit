@@ -63,10 +63,7 @@ with st.sidebar:
 
 if s.get("demo"):
     st.info("지금은 지어낸 예시 데이터입니다. 실제 측정값이 아닙니다.")
-if stt.provider() == "claude":
-    st.warning("지금은 Claude로 동작합니다. 녹음 인식은 꺼져 있고 글자 보정만 됩니다. "
-               "왼쪽의 **예시 데이터로 체험**으로 학습과 효과 확인을 볼 수 있습니다.")
-elif not has_key:
+if not has_key:
     st.warning("AI 키가 아직 설정되지 않아 녹음 인식은 꺼져 있습니다. "
                "왼쪽의 **예시 데이터로 체험**을 누르면 학습, 효과 확인, 보정을 그대로 볼 수 있습니다.")
 
@@ -75,7 +72,7 @@ learn_tab, eval_tab, use_tab = st.tabs(["1. 내 발음 학습", "2. 효과 확�
 with learn_tab:
     active = core.rules(s.profile)
     if has_key:
-        agreed = st.checkbox("녹음한 음성을 인식을 위해 Gemini로 보내는 데 동의합니다.")
+        agreed = st.checkbox("녹음한 음성을 인식을 위해 외부 AI 서비스로 보내는 데 동의합니다.")
         i = s.cal_i
         if i >= len(data.CALIBRATION):
             st.success("준비한 문장을 모두 읽었습니다. 효과 확인으로 넘어가 주세요.")
@@ -101,7 +98,7 @@ with eval_tab:
     i = s.eval_i
     if has_key and i < len(data.EVALUATION):
         st.subheader(data.EVALUATION[i])
-        if st.checkbox("녹음을 Gemini로 보내는 데 동의합니다.", key="eval_ok"):
+        if st.checkbox("녹음을 외부 AI 서비스로 보내는 데 동의합니다.", key="eval_ok"):
             clip = new_audio(f"eval{i}")
             if clip and (hyp := recognise(clip)):
                 s.eval_pairs.append((data.EVALUATION[i], hyp))

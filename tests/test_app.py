@@ -49,7 +49,7 @@ def test_overcorrection_is_counted():
 
 @pytest.fixture(autouse=True)
 def clean(monkeypatch, tmp_path):
-    for k in ("SCHOOL_GEMINI_API_KEY", "ANTHROPIC_API_KEY", "AI_PROVIDER"):
+    for k in ("SCHOOL_GEMINI_API_KEY", "ANTHROPIC_API_KEY", "AI_PROVIDER", "GROQ_API_KEY", "GROQ__CHUNGHO208"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(stt, "POOL", tmp_path / "none.env")
     monkeypatch.setattr(stt, "COUNTER", tmp_path / "calls.json")
@@ -59,10 +59,13 @@ def test_provider_order(monkeypatch):
     assert stt.provider() is None
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
     assert stt.provider() == "claude" and not stt.can_record()
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    assert stt.can_record()
+    monkeypatch.delenv("GROQ_API_KEY")
     monkeypatch.setenv("SCHOOL_GEMINI_API_KEY", "x")
     assert stt.provider() == "gemini" and stt.can_record()
     monkeypatch.setenv("AI_PROVIDER", "claude")
-    assert stt.provider() == "claude" and not stt.can_record()
+    assert stt.provider() == "claude" and stt.can_record()
 
 
 def test_pool_file_is_read(monkeypatch, tmp_path):

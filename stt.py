@@ -62,8 +62,11 @@ def provider():
 
 
 def can_record():
-    """녹음 인식은 Gemini로만 한다."""
-    return bool(api_key()) and provider() == "gemini"
+    return bool(api_key() or groq_key())
+
+
+def groq_key():
+    return _setting("GROQ_API_KEY") or _setting("GROQ__CHUNGHO208")
 
 
 def daily_limit():
@@ -118,9 +121,27 @@ def _claude(prompt):
         raise Unavailable("AI 호출에 실패했습니다. 잠시 뒤 다시 시도해 주세요.") from None
 
 
+def _groq(audio, mime):
+    _count_call()
+    try:
+        r = requests.post(
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {groq_key()}"},
+            files={"file": ("speech.wav", audio, mime)},
+            data={"model": _setting("GROQ_MODEL", "whisper-large-v3"), "language": "ko",
+                  "temperature": "0", "response_format": "json"},
+            timeout=60)
+        r.raise_for_status()
+        return r.json()["text"].strip()
+    except (requests.RequestException, KeyError, ValueError):
+        raise Unavailable("음성 인식에 실패했습니다. 잠시 뒤 다시 시도해 주세요.") from None
+
+
 def transcribe(audio, mime="audio/wav"):
     if not can_record():
-        raise Unavailable("녹음 인식은 Gemini 키가 있어야 합니다.")
+        raise Unavailable("녹음 인식 키가 아직 설정되지 않았습니다.")
+    if not api_key():
+        return _groq(audio, mime)
     data = base64.b64encode(audio).decode()
     return _generate([{"text": PROMPT}, {"inline_data": {"mime_type": mime, "data": data}}])
 

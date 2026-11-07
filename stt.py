@@ -8,6 +8,7 @@ from pathlib import Path
 
 import requests
 
+POOL = Path.home() / ".all-tomorrow" / "key-pool.env"
 COUNTER = Path(tempfile.gettempdir()) / "voicefit_calls.json"
 PROMPT = ("이 한국어 음성을 들리는 그대로 받아 적어라. 맞춤법이나 문맥으로 고치지 말고, "
           "들린 발음에 가장 가까운 표기로 적어라. 받아 적은 문장만 출력하라.")
@@ -17,18 +18,52 @@ class Unavailable(Exception):
     """사용자에게 그대로 보여 줄 수 있는 실패."""
 
 
+def _from_pool(name):
+    """로컬 전용 키 파일. Cloud에는 없으므로 없으면 조용히 넘어간다."""
+    try:
+        lines = POOL.read_text(encoding="utf8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        if line.startswith(name + "="):
+            return line.split("=", 1)[1].strip().strip("\"'") or None
+    return None
+
+
 def _setting(name, default=None):
     if os.environ.get(name):
         return os.environ[name]
     try:
         import streamlit as st
-        return st.secrets.get(name, default)
+        value = st.secrets.get(name)
+        if value:
+            return value
     except Exception:
-        return default
+        pass
+    return _from_pool(name) or default
 
 
 def api_key():
     return _setting("SCHOOL_GEMINI_API_KEY")
+
+
+def claude_key():
+    return _setting("ANTHROPIC_API_KEY")
+
+
+def provider():
+    """글자 보정에 쓸 AI. AI_PROVIDER가 우선이고, 없으면 학교 Gemini, 그다음 Claude."""
+    chosen = (_setting("AI_PROVIDER") or "").strip().lower()
+    if chosen in ("claude", "gemini"):
+        return chosen
+    if api_key():
+        return "gemini"
+    return "claude" if claude_key() else None
+
+
+def can_record():
+    """녹음 인식은 Gemini로만 한다."""
+    return bool(api_key()) and provider() == "gemini"
 
 
 def daily_limit():
@@ -65,7 +100,27 @@ def _generate(parts):
         raise Unavailable("AI 호출에 실패했습니다. 잠시 뒤 다시 시도해 주세요.") from None
 
 
+def _claude(prompt):
+    key = claude_key()
+    if not key:
+        raise Unavailable("Claude 키가 아직 설정되지 않았습니다.")
+    _count_call()
+    try:
+        r = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+            json={"model": _setting("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 1024,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=60)
+        r.raise_for_status()
+        return "".join(b.get("text", "") for b in r.json()["content"]).strip()
+    except (requests.RequestException, KeyError, ValueError):
+        raise Unavailable("AI 호출에 실패했습니다. 잠시 뒤 다시 시도해 주세요.") from None
+
+
 def transcribe(audio, mime="audio/wav"):
+    if not can_record():
+        raise Unavailable("녹음 인식은 Gemini 키가 있어야 합니다.")
     data = base64.b64encode(audio).decode()
     return _generate([{"text": PROMPT}, {"inline_data": {"mime_type": mime, "data": data}}])
 
@@ -73,8 +128,11 @@ def transcribe(audio, mime="audio/wav"):
 def polish(text, active_rules):
     """규칙을 근거로 문맥이 분명한 곳만 고친다. 모호하면 그대로 둔다."""
     listing = "\n".join(f"{w} → {r}" for w, r in active_rules.items())
-    return _generate([{"text": (
+    prompt = (
         "다음은 한 사람의 음성 인식 결과와, 그 사람에게 반복되는 오류 목록이다. "
         "목록에 있는 오류이고 문맥상 확실할 때만 고쳐라. 조금이라도 모호하면 그대로 둬라. "
         "새 내용을 더하거나 다듬지 마라. 문장만 출력하라.\n\n"
-        f"오류 목록:\n{listing}\n\n문장: {text}")}])
+        f"오류 목록:\n{listing}\n\n문장: {text}")
+    if provider() == "claude":
+        return _claude(prompt)
+    return _generate([{"text": prompt}])

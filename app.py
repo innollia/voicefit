@@ -13,7 +13,7 @@ s.setdefault("eval_pairs", [])
 s.setdefault("cal_i", 0)
 s.setdefault("eval_i", 0)
 s.setdefault("seen", set())
-has_key = bool(stt.api_key())
+has_key = stt.can_record()
 
 
 def new_audio(widget_key):
@@ -63,7 +63,10 @@ with st.sidebar:
 
 if s.get("demo"):
     st.info("지금은 지어낸 예시 데이터입니다. 실제 측정값이 아닙니다.")
-if not has_key:
+if stt.provider() == "claude":
+    st.warning("지금은 Claude로 동작합니다. 녹음 인식은 꺼져 있고 글자 보정만 됩니다. "
+               "왼쪽의 **예시 데이터로 체험**으로 학습과 효과 확인을 볼 수 있습니다.")
+elif not has_key:
     st.warning("AI 키가 아직 설정되지 않아 녹음 인식은 꺼져 있습니다. "
                "왼쪽의 **예시 데이터로 체험**을 누르면 학습, 효과 확인, 보정을 그대로 볼 수 있습니다.")
 
@@ -138,7 +141,7 @@ with use_tab:
             st.caption("확실한 오류가 없어 그대로 두었습니다.")
         else:
             st.caption("아직 프로필이 비어 있습니다.")
-        if has_key and core.rules(s.profile) and st.button("AI로 문맥까지 확인"):
+        if stt.provider() and core.rules(s.profile) and st.button("AI로 문맥까지 확인"):
             try:
                 st.write(stt.polish(fixed, core.rules(s.profile)))
             except stt.Unavailable as e:

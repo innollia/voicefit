@@ -47,8 +47,53 @@ def test_overcorrection_is_counted():
     assert core.evaluate(p, [("이사를 했다", "이사를 했다")])["harmed"] == 1
 
 
+@pytest.fixture(autouse=True)
+def clean(monkeypatch, tmp_path):
+    for k in ("SCHOOL_GEMINI_API_KEY", "ANTHROPIC_API_KEY", "AI_PROVIDER"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(stt, "POOL", tmp_path / "none.env")
+    monkeypatch.setattr(stt, "COUNTER", tmp_path / "calls.json")
+
+
+def test_provider_order(monkeypatch):
+    assert stt.provider() is None
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    assert stt.provider() == "claude" and not stt.can_record()
+    monkeypatch.setenv("SCHOOL_GEMINI_API_KEY", "x")
+    assert stt.provider() == "gemini" and stt.can_record()
+    monkeypatch.setenv("AI_PROVIDER", "claude")
+    assert stt.provider() == "claude" and not stt.can_record()
+
+
+def test_pool_file_is_read(monkeypatch, tmp_path):
+    f = tmp_path / "k.env"
+    f.write_text("ANTHROPIC_API_KEY=abc\n", encoding="utf8")
+    monkeypatch.setattr(stt, "POOL", f)
+    assert stt.claude_key() == "abc"
+
+
+def test_claude_polish_uses_messages_api(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("CLAUDE_MODEL", "m")
+    seen = {}
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"content": [{"type": "text", "text": "회의"}]}
+
+    def post(url, headers, json, timeout):
+        seen.update(url=url, model=json["model"])
+        return R()
+
+    monkeypatch.setattr(stt.requests, "post", post)
+    assert stt.polish("외의", {"외의": "회의"}) == "회의"
+    assert seen == {"url": "https://api.anthropic.com/v1/messages", "model": "m"}
+
+
 def test_no_key_refuses(monkeypatch):
-    monkeypatch.delenv("SCHOOL_GEMINI_API_KEY", raising=False)
     with pytest.raises(stt.Unavailable):
         stt.transcribe(b"x")
 

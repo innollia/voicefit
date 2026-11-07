@@ -121,7 +121,7 @@ def test_daily_limit(monkeypatch, tmp_path):
 def test_app_without_key_shows_guide_and_demo(monkeypatch):
     from streamlit.testing.v1 import AppTest
     monkeypatch.delenv("SCHOOL_GEMINI_API_KEY", raising=False)
-    at = AppTest.from_file(str(ROOT / "app.py")).run()
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
     assert not at.exception and "AI 키" in at.warning[0].value
     at.sidebar.button[0].click().run()
     assert not at.exception

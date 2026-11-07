@@ -125,4 +125,4 @@ def test_app_without_key_shows_guide_and_demo(monkeypatch):
     assert not at.exception and "AI 키" in at.warning[0].value
     at.button(key="demo_btn").click().run()
     assert not at.exception
-    assert any(m.label == "좋아진 문장" and m.value != "0" for m in at.metric)
+    assert any(m.label == "규칙으로 좋아진 문장" and m.value != "0" for m in at.metric)

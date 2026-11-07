@@ -16,6 +16,9 @@ PROMPT = ("이 한국어 음성을 들리는 그대로 받아 적어라. 맞춤�
           "들린 발음에 가장 가까운 표기로 적어라. 받아 적은 문장만 출력하라.")
 
 
+GROQ_DEFAULT = "whisper-large-v3-turbo"  # 가볍고 빠른 판
+
+
 class Unavailable(Exception):
     """사용자에게 그대로 보여 줄 수 있는 실패."""
 
@@ -70,9 +73,9 @@ def can_record():
 def stt_model():
     """지금 녹음을 받아 적는 모델 이름. 없으면 None."""
     if api_key():
-        return "Gemini " + _setting("GEMINI_MODEL", "gemini-2.5-flash")
+        return "Gemini " + _setting("GEMINI_MODEL", "gemini-2.5-flash-lite")
     if groq_key():
-        return "Groq " + _setting("GROQ_MODEL", "whisper-large-v3")
+        return "Groq " + _setting("GROQ_MODEL", GROQ_DEFAULT)
     return None
 
 
@@ -103,7 +106,7 @@ def _generate(parts):
     if not key:
         raise Unavailable("AI 키가 아직 설정되지 않았습니다.")
     _count_call()
-    model = _setting("GEMINI_MODEL", "gemini-2.5-flash")
+    model = _setting("GEMINI_MODEL", "gemini-2.5-flash-lite")
     try:
         r = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
@@ -125,7 +128,7 @@ def _claude(prompt):
         r = requests.post(
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-            json={"model": _setting("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 1024,
+            json={"model": _setting("CLAUDE_MODEL", "claude-haiku-5-5"), "max_tokens": 1024,
                   "messages": [{"role": "user", "content": prompt}]},
             timeout=60)
         r.raise_for_status()
@@ -141,7 +144,7 @@ def _groq(audio, mime):
             "https://api.groq.com/openai/v1/audio/transcriptions",
             headers={"Authorization": f"Bearer {groq_key()}"},
             files={"file": ("speech." + mime.split("/")[-1], audio, mime)},
-            data={"model": _setting("GROQ_MODEL", "whisper-large-v3"), "language": "ko",
+            data={"model": _setting("GROQ_MODEL", GROQ_DEFAULT), "language": "ko",
                   "temperature": "0", "response_format": "json"},
             timeout=60)
         r.raise_for_status()

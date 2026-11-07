@@ -19,6 +19,7 @@ EXAMPLE = "내일 외의는 하교에서 합니다."
 model =stt.stt_model()
 s.setdefault("profile", core.new_profile(model))
 s.setdefault("eval_pairs", [])
+s.setdefault("eval_ai", [])     # 효과 확인 문장마다 AI가 고친 문장
 s.setdefault("cal_left", list(data.CALIBRATION))
 s.setdefault("eval_left", list(data.EVALUATION))
 s.setdefault("acks", {})         # 녹음기에 받았다고 답한 마지막 번호
@@ -35,7 +36,7 @@ def label(text):
 
 
 def reset_profile():
-    s.profile, s.eval_pairs = core.new_profile(model), []
+    s.profile, s.eval_pairs, s.eval_ai = core.new_profile(model), [], []
     s.cal_left, s.eval_left = list(data.CALIBRATION), list(data.EVALUATION)
     s.jobs, s.free_rows = [], []
     s.demo = False
@@ -58,9 +59,23 @@ def recorder(kind, left=None):
         job = workers().submit(free_job, *audio, copy.deepcopy(profile))
     else:
         left.remove(got["ref"])
-        job = workers().submit(stt.transcribe, *audio)
+        fn = eval_job if kind == "eval" else stt.transcribe
+        job = workers().submit(fn, *audio, *([copy.deepcopy(profile)] if kind == "eval" else []))
     s.jobs.append({"kind": kind, "ref": got["ref"], "future": job})
     st.rerun()
+
+
+def eval_job(audio, mime, snapshot):
+    """받아 적은 문장과, 그때의 규칙으로 AI가 고친 문장을 함께 돌려준다."""
+    raw = stt.transcribe(audio, mime)
+    fixed, _ = core.correct(snapshot, raw)
+    ai = None
+    if stt.provider():
+        try:
+            ai = stt.polish(fixed, core.rules(snapshot))
+        except stt.Unavailable:
+            pass
+    return raw, ai
 
 
 def free_job(audio, mime, snapshot):
@@ -95,7 +110,8 @@ def drain():
             core.learn(s.profile, ref, result)
             s.last = result
         elif kind == "eval":
-            s.eval_pairs.append((ref, result))
+            s.eval_pairs.append((ref, result[0]))
+            s.eval_ai.append(result[1])
         else:
             s.free_rows.insert(0, result)
 
@@ -132,6 +148,7 @@ def load_demo():
     for ref, hyp in data.DEMO_CALIBRATION:
         core.learn(p, ref, hyp)
     s.profile, s.eval_pairs = p, list(data.DEMO_EVALUATION)
+    s.eval_ai = [None] * len(s.eval_pairs)
     s.demo = True
 
 
@@ -215,13 +232,22 @@ with eval_tab:
         status()
         if s.eval_pairs:
             r = core.evaluate(current(), s.eval_pairs)
-            a, b, c, d = st.columns(4)
+            ai = [(ref, x) for (ref, _), x in zip(s.eval_pairs, s.eval_ai) if x is not None]
+            a, b, e = st.columns(3)
             a.metric("일반 오류율", f"{r['before']:.1%}")
-            b.metric("보정 후", f"{r['after']:.1%}")
-            c.metric("좋아진 문장", r["improved"])
-            d.metric("나빠진 문장", r["harmed"])
-            st.dataframe([{k: x[k] for k in ("대본", "일반 인식", "보정 결과")} for x in r["rows"]],
-                         use_container_width=True, hide_index=True)
+            b.metric("규칙 보정 후", f"{r['after']:.1%}")
+            if ai:
+                e.metric("AI 보정 후", f"{sum(core.cer(ref, x) for ref, x in ai) / len(ai):.1%}",
+                         help=f"AI 결과가 있는 {len(ai)}문장 기준")
+            else:
+                e.metric("AI 보정 후", "없음")
+            c, d = st.columns(2)
+            c.metric("규칙으로 좋아진 문장", r["improved"])
+            d.metric("규칙으로 나빠진 문장", r["harmed"])
+            rows = [{k: x[k] for k in ("대본", "일반 인식", "보정 결과")} for x in r["rows"]]
+            for row, x in zip(rows, s.eval_ai):
+                row["AI 보정"] = x or ""
+            st.dataframe(rows, use_container_width=True, hide_index=True)
 
     eval_result()
 

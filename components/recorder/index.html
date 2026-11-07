@@ -19,7 +19,7 @@
 <div id="count"></div>
 <div id="sentence"></div>
 <button id="main">녹음 시작</button>
-<button id="stop" hidden>멈추기</button>
+<button id="stop" hidden>쉬기</button>
 <div id="note"></div>
 <script>
 const $ = id => document.getElementById(id);
@@ -42,7 +42,7 @@ function draw() {
   $("sentence").textContent = text || "";
   $("count").textContent = !free && text ? `${args.total - args.left.length + inflight.size + (on ? 0 : 1)} / ${args.total}` : "";
   const done = !free && !on && !rest.length;
-  $("main").textContent = done ? "모두 읽었습니다" : on ? (rest.length ? "다음으로" : "끝내기") : "녹음 시작";
+  $("main").textContent = done ? "모두 읽었습니다" : on ? (!rest.length ? "끝내기" : free ? "끄고 다음 녹음" : "끄고 다음 문장") : "녹음 시작";
   $("main").disabled = done;
   $("main").className = on ? "on" : "";
   $("stop").hidden = !on;

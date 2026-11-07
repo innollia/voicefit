@@ -102,3 +102,36 @@ def evaluate(profile, pairs):
         "harmed": sum(x["after"] > x["before"] for x in rows),
         "rows": rows,
     }
+
+
+# 소리 단위 습관. 단어 규칙은 같은 단어가 반복돼야 생기지만,
+# 습관은 서로 다른 단어에서 같은 소리가 같은 소리로 바뀐 것을 모은다.
+ONSET = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+VOWEL = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
+CODA = ["없음"] + list("ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ")
+PART = ("첫소리", "가운데소리", "받침")
+
+
+def jamo(ch):
+    n = ord(ch) - 0xAC00
+    if not 0 <= n < 11172:
+        return None
+    return ONSET[n // 588], VOWEL[n % 588 // 28], CODA[n % 28]
+
+
+def habits(profile, min_words=2):
+    """여러 단어에서 되풀이된 소리 바뀜. [(자리, 원래, 들린 것, 단어 수)]"""
+    found = {}
+    for wrong, targets in profile["errors"].items():
+        for right in targets:
+            if len(wrong) != len(right):
+                continue
+            for a, b in zip(right, wrong):
+                ja, jb = jamo(a), jamo(b)
+                if not ja or not jb or ja == jb:
+                    continue
+                for part, x, y in zip(PART, ja, jb):
+                    if x != y:
+                        found.setdefault((part, x, y), set()).add(right)
+    out = [(p, x, y, len(w)) for (p, x, y), w in found.items() if len(w) >= min_words]
+    return sorted(out, key=lambda h: -h[3])

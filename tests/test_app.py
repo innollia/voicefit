@@ -126,3 +126,16 @@ def test_app_without_key_shows_guide_and_demo(monkeypatch):
     at.button(key="demo_btn").click().run()
     assert not at.exception
     assert any(m.label == "규칙으로 좋아진 문장" and m.value != "0" for m in at.metric)
+
+
+def test_habit_needs_two_different_words():
+    p = core.new_profile("A")
+    core.learn(p, "회의가 있다", "외의가 있다")
+    assert core.habits(p) == []
+    core.learn(p, "학교 간다", "악교 간다")
+    assert core.habits(p) == [("첫소리", "ㅎ", "ㅇ", 2)]
+
+
+def test_scripts_vary_endings():
+    ends = {s.rstrip(".?!")[-1] for s in data.CALIBRATION}
+    assert len(ends) >= 8 and sum(s.endswith("?") for s in data.CALIBRATION) >= 4

@@ -74,7 +74,7 @@ def eval_job(audio, mime, snapshot):
     ai = None
     if stt.provider():
         try:
-            ai = stt.polish(fixed, core.rules(snapshot))
+            ai = stt.polish(fixed, core.rules(snapshot), core.habits(snapshot))
         except stt.Unavailable:
             pass
     return raw, ai
@@ -86,7 +86,7 @@ def free_job(audio, mime, snapshot):
     row = {"일반 인식": raw, "내 프로필로 보정": fixed}
     if stt.provider():
         try:
-            row["AI 문맥 보정"] = stt.polish(fixed, core.rules(snapshot))
+            row["AI 문맥 보정"] = stt.polish(fixed, core.rules(snapshot), core.habits(snapshot))
         except stt.Unavailable:
             row["AI 문맥 보정"] = fixed
     return row
@@ -146,7 +146,7 @@ def ai_fix(text, rules):
     key = (text, tuple(sorted(rules.items())))
     if s.get("ai_key") != key:
         try:
-            s.ai_text = stt.polish(text, rules)
+            s.ai_text = stt.polish(text, rules, core.habits(current()))
         except stt.Unavailable as e:
             st.error(str(e))
             return text
@@ -231,6 +231,13 @@ with learn_tab:
             if p["sentences"]:
                 st.caption(f"지금까지 단어가 다른 단어로 인식된 곳 {seen}곳, 같은 오류가 반복된 곳 "
                            f"{sum(max(v.values()) >= core.MIN_COUNT for v in p['errors'].values())}곳")
+        found = core.habits(p)
+        label("찾아낸 발음 습관")
+        if found:
+            st.table([{"자리": part, "원래 소리": x, "이렇게 들림": y, "나온 단어 수": n} for part, x, y, n in found])
+            st.caption("서로 다른 단어에서 같은 소리가 같은 식으로 바뀐 것입니다. AI 보정이 이 습관을 참고합니다.")
+        else:
+            st.write("두 단어 이상에서 같은 소리가 같은 식으로 바뀌면 여기에 나타납니다.")
         if s.cal_log:
             label(f"학습한 문장 {len(s.cal_log)}개")
             for i in range(len(s.cal_log) - 1, max(-1, len(s.cal_log) - 6), -1):

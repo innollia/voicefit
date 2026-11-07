@@ -162,15 +162,16 @@ def transcribe(audio, mime="audio/wav"):
     return _generate([{"text": PROMPT}, {"inline_data": {"mime_type": mime, "data": data}}])
 
 
-def polish(text, active_rules):
+def polish(text, active_rules, habits=()):
     """잘못 들은 것이 문맥상 분명한 곳만 고친다. 규칙이 없어도 동작하고, 모호하면 그대로 둔다."""
     listing = "\n".join(f"{w} → {r}" for w, r in active_rules.items()) or "(아직 없음)"
+    sounds = "\n".join(f"{part} {x}이(가) {y}(으)로 들림 ({n}개 단어)" for part, x, y, n in habits) or "(아직 없음)"
     prompt = (
-        "다음은 한 사람의 음성 인식 결과와, 그 사람에게 반복되는 오류 목록이다. "
-        "목록의 오류와, 목록에 없어도 비슷한 발음을 잘못 받아 적은 것이 문맥상 확실한 곳만 고쳐라. "
-        "조금이라도 모호하면 그대로 둬라. 말투, 어순, 띄어쓰기를 다듬거나 새 내용을 더하지 마라. "
+        "다음은 한 사람의 음성 인식 결과와, 그 사람에게 반복되는 오류와 발음 습관이다. "
+        "목록의 오류, 그리고 이 발음 습관 때문에 비슷한 소리를 잘못 받아 적은 것이 문맥상 확실한 곳만 고쳐라. "
+        "조금이라도 모호하면 그대로 둬라. 말투, 어순, 띄어쓰기, 끝맺음을 다듬거나 새 내용을 더하지 마라. "
         "문장만 출력하라.\n\n"
-        f"오류 목록:\n{listing}\n\n문장: {text}")
+        f"반복 오류:\n{listing}\n\n발음 습관:\n{sounds}\n\n문장: {text}")
     if provider() == "claude":
         return _claude(prompt)
     return _generate([{"text": prompt}])

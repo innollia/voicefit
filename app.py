@@ -20,8 +20,8 @@ model =stt.stt_model()
 s.setdefault("profile", core.new_profile(model))
 s.setdefault("eval_pairs", [])
 s.setdefault("eval_ai", [])     # 효과 확인 문장마다 AI가 고친 문장
-s.setdefault("cal_left", list(data.CALIBRATION))
-s.setdefault("eval_left", list(data.EVALUATION))
+if "cal_left" not in s:
+    s.cal_left, s.eval_left = data.draw()
 s.setdefault("acks", {})         # 녹음기에 받았다고 답한 마지막 번호
 s.setdefault("jobs", [])        # 뒤에서 받아 적는 중인 녹음
 s.setdefault("free_rows", [])
@@ -38,7 +38,7 @@ def label(text):
 
 def reset_profile():
     s.profile, s.eval_pairs, s.eval_ai = core.new_profile(model), [], []
-    s.cal_left, s.eval_left = list(data.CALIBRATION), list(data.EVALUATION)
+    s.cal_left, s.eval_left = data.draw()
     s.jobs, s.free_rows, s.cal_log = [], [], []
     s.demo = False
 

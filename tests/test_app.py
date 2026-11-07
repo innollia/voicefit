@@ -153,3 +153,9 @@ def test_empty_or_wild_ai_falls_back():
     assert core.guard("오늘 회의", "") == "오늘 회의"
     assert core.guard("오늘 회의", "전혀 다른 긴 문장을 지어냈다") == "오늘 회의"
     assert core.guard("오늘 외의", "문장: 오늘 회의") == "오늘 회의"
+
+
+def test_draw_varies_and_never_overlaps():
+    a, b = data.draw()
+    c, _ = data.draw()
+    assert len(a) == 30 and len(b) == 10 and not set(a) & set(b) and a != c

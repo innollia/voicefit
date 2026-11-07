@@ -122,7 +122,7 @@ with use_tab:
         if clip is not None and s.get("free_id") != clip.file_id:
             s.free_id = clip.file_id
             s.free_text = recognise((clip.getvalue(), clip.type or "audio/wav")) or ""
-        text = s.get("free_text", "")
+        text = st.text_input("인식 결과 (직접 고쳐 넣어도 됩니다)", s.get("free_text", "내일 외의는 하교에서 합니다."))
     else:
         text = st.text_input("인식된 문장을 넣어 보세요", "내일 외의는 하교에서 합니다.")
     if text:

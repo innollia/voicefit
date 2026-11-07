@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+  body { margin: 0; font-family: "Pretendard", -apple-system, "Malgun Gothic", sans-serif; color: var(--ink, #17181c); }
+  #count { font-size: .85rem; font-weight: 700; opacity: .65; min-height: 1.2em; }
+  #sentence { font-size: 1.6rem; font-weight: 700; line-height: 1.45; letter-spacing: -.01em; margin: .4rem 0 1rem; min-height: 2.3em; }
+  #sentence:empty { display: none; }
+  button { font: inherit; font-weight: 700; font-size: 1rem; padding: .7rem 1.2rem; border-radius: 8px; border: 1px solid #c9ccd3; background: transparent; color: inherit; cursor: pointer; }
+  #main { background: #2f5bea; border-color: #2f5bea; color: #fff; }
+  #main.on { background: #d33a3a; border-color: #d33a3a; }
+  #stop[hidden] { display: none; }
+  #note { font-size: .9rem; margin-top: .6rem; min-height: 1.3em; opacity: .75; }
+</style>
+</head>
+<body>
+<div id="count"></div>
+<div id="sentence"></div>
+<button id="main">녹음 시작</button>
+<button id="stop" hidden>멈추기</button>
+<div id="note"></div>
+<script>
+const $ = id => document.getElementById(id);
+const post = (type, data) => window.parent.postMessage({isStreamlitMessage: true, type, ...data}, "*");
+let args = {left: null, ack: null, total: 0};
+let stream = null, rec = null, ref = null;
+let nextId = Date.now();
+const queue = [], inflight = new Map();   // id → 보낸 문장
+let waiting = null;
+
+function pending() {
+  const taken = new Set(inflight.values());
+  return args.left === null ? [null] : args.left.filter(t => !taken.has(t));
+}
+
+function draw() {
+  const on = rec !== null, free = args.left === null;
+  const rest = pending();
+  const text = on ? ref : rest[0];
+  $("sentence").textContent = text || "";
+  $("count").textContent = !free && text ? `${args.total - args.left.length + inflight.size + (on ? 0 : 1)} / ${args.total}` : "";
+  const done = !free && !on && !rest.length;
+  $("main").textContent = done ? "모두 읽었습니다" : on ? (rest.length ? "다음으로" : "끝내기") : "녹음 시작";
+  $("main").disabled = done;
+  $("main").className = on ? "on" : "";
+  $("stop").hidden = !on;
+  $("note").textContent = on ? "녹음 중입니다" : "";
+  post("streamlit:setFrameHeight", {height: document.body.scrollHeight + 8});
+}
+
+async function start() {
+  if (!stream) stream = await navigator.mediaDevices.getUserMedia({audio: true});
+  const rest = pending();
+  if (!rest.length) return;
+  ref = rest[0];
+  const id = nextId++, parts = [], current = new MediaRecorder(stream), said = ref;
+  if (said !== null) inflight.set(id, said);
+  current.ondataavailable = e => parts.push(e.data);
+  current.onstop = () => upload(id, said, new Blob(parts, {type: current.mimeType}));
+  rec = current;
+  rec.start();
+  draw();
+}
+
+function finish() {
+  const current = rec;
+  rec = null;
+  current.stop();
+}
+
+function upload(id, said, blob) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    queue.push({id, ref: said, mime: blob.type.split(";")[0], audio: reader.result.split(",")[1]});
+    pump();
+  };
+  reader.readAsDataURL(blob);
+}
+
+// 값 하나를 앱이 받았다고 답해야 다음 값을 보낸다. 겹치면 앞 녹음이 사라진다.
+function pump() {
+  if (waiting !== null || !queue.length) return;
+  const item = queue.shift();
+  waiting = item.id;
+  post("streamlit:setComponentValue", {dataType: "json", value: item});
+}
+
+$("main").onclick = async () => {
+  try {
+    if (rec) { finish(); if (pending().length) await start(); else draw(); }
+    else await start();
+  } catch (e) {
+    $("note").textContent = "마이크를 쓸 수 없습니다. 브라우저에서 마이크를 허용해 주세요.";
+  }
+};
+$("stop").onclick = () => { finish(); draw(); };
+
+window.addEventListener("message", e => {
+  if (e.data.type !== "streamlit:render") return;
+  args = e.data.args;
+  if (waiting !== null && args.ack === waiting) {
+    inflight.delete(waiting);
+    waiting = null;
+    pump();
+  }
+  const theme = e.data.theme;
+  if (theme) document.documentElement.style.setProperty("--ink", theme.textColor);
+  draw();
+});
+post("streamlit:componentReady", {apiVersion: 1});
+</script>
+</body>
+</html>

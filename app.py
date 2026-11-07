@@ -1,15 +1,18 @@
+import base64
 import copy
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import core
 import data
 import stt
 
 st.set_page_config(page_title="내 목소리 맞춤 인식", page_icon="🎙️", layout="centered")
+recorder_ui = components.declare_component("recorder", path=str(Path(__file__).parent / "components" / "recorder"))
 s = st.session_state
 LIVE_URL = "https://bull-give-broker-warned.trycloudflare.com/"  # 터널을 다시 켜면 바꾼다
 EXAMPLE = "내일 외의는 하교에서 합니다."
@@ -18,7 +21,7 @@ s.setdefault("profile", core.new_profile(model))
 s.setdefault("eval_pairs", [])
 s.setdefault("cal_left", list(data.CALIBRATION))
 s.setdefault("eval_left", list(data.EVALUATION))
-s.setdefault("rec_n", 0)        # 녹음할 때마다 새 입력칸을 준다
+s.setdefault("acks", {})         # 녹음기에 받았다고 답한 마지막 번호
 s.setdefault("jobs", [])        # 뒤에서 받아 적는 중인 녹음
 s.setdefault("free_rows", [])
 s.setdefault("seen", set())
@@ -29,10 +32,6 @@ st.markdown(f"<style>{(Path(__file__).parent / 'style.css').read_text(encoding='
 
 def label(text):
     st.markdown(f'<p class="eyebrow">{text}</p>', unsafe_allow_html=True)
-
-
-def script(text):
-    st.markdown(f'<p class="script">{text}</p>', unsafe_allow_html=True)
 
 
 def reset_profile():
@@ -47,18 +46,20 @@ def workers():
     return ThreadPoolExecutor(4)
 
 
-def new_audio(kind):
-    """새 녹음이 들어오면 바이트를 돌려준다. 파일로 저장하지 않는다."""
-    clip = st.audio_input("녹음", key=f"{kind}{s.rec_n}", label_visibility="collapsed")
-    if clip is None:
-        return None
-    s.rec_n += 1
-    return clip.getvalue(), clip.type or "audio/wav"
-
-
-def submit(kind, ref, fn, *args):
-    """받아 적기는 뒤에서 돌리고, 사용자는 바로 다음 녹음을 한다."""
-    s.jobs.append({"kind": kind, "ref": ref, "future": workers().submit(fn, *args)})
+def recorder(kind, left=None):
+    """녹음은 브라우저에서 이어지고, 받은 녹음은 뒤에서 받아 적는다. 파일로 저장하지 않는다."""
+    total = len(data.EVALUATION if kind == "eval" else data.CALIBRATION)
+    got = recorder_ui(left=left, ack=s.acks.get(kind), total=total, key=f"rec_{kind}", default=None)
+    if not got or got["id"] == s.acks.get(kind):
+        return
+    s.acks[kind] = got["id"]
+    audio = base64.b64decode(got["audio"]), got["mime"] or "audio/webm"
+    if kind == "free":
+        job = workers().submit(free_job, *audio, copy.deepcopy(profile))
+    else:
+        left.remove(got["ref"])
+        job = workers().submit(stt.transcribe, *audio)
+    s.jobs.append({"kind": kind, "ref": got["ref"], "future": job})
     st.rerun()
 
 
@@ -84,10 +85,8 @@ def drain():
         except stt.Unavailable as e:
             s.job_error = str(e)
             if kind in ("cal", "eval"):
-                queue = s[f"{kind}_left"]
-                queue.append(ref)
-                if len(queue) == 1:  # 읽을 문장이 없던 화면을 다시 그린다
-                    st.rerun()
+                s[f"{kind}_left"].append(ref)
+                st.rerun()
             continue
         s.job_error = None
         if kind == "cal":
@@ -184,17 +183,10 @@ learn_tab, eval_tab, use_tab = st.tabs(["1. 내 발음 학습", "2. 효과 확�
 with learn_tab:
     if has_key:
         agreed = st.checkbox("녹음한 음성을 인식을 위해 외부 AI 서비스로 보내는 데 동의합니다.")
-        left = s.cal_left
-        total = len(data.CALIBRATION)
-        if not left:
+        if not s.cal_left and not s.jobs:
             st.success("준비한 문장을 모두 읽었습니다. 효과 확인으로 넘어가 주세요.")
         elif agreed and usable:
-            st.progress((total - len(left)) / total, f"{total - len(left) + 1} / {total}")
-            script(left[0])
-            clip = new_audio("cal")
-            if clip:
-                s.cal_left = left[1:]
-                submit("cal", left[0], stt.transcribe, *clip)
+            recorder("cal", s.cal_left)
 
     @live
     def learn_result():
@@ -213,14 +205,9 @@ with learn_tab:
 
 with eval_tab:
     st.write("학습에 쓰지 않은 문장으로 비교합니다. 멀쩡한 문장을 망친 경우도 함께 셉니다.")
-    left = s.eval_left
-    if has_key and left:
-        script(left[0])
+    if has_key and s.eval_left:
         if st.checkbox("녹음을 외부 AI 서비스로 보내는 데 동의합니다.", key="eval_ok"):
-            clip = new_audio("eval")
-            if clip:
-                s.eval_left = left[1:]
-                submit("eval", left[0], stt.transcribe, *clip)
+            recorder("eval", s.eval_left)
 
     @live
     def eval_result():
@@ -241,9 +228,7 @@ with eval_tab:
 with use_tab:
     if has_key:
         st.write("아무 말이나 녹음해 보세요. 처리되는 동안 계속 녹음할 수 있습니다.")
-        clip = new_audio("free")
-        if clip:
-            submit("free", None, free_job, *clip, copy.deepcopy(profile))
+        recorder("free")
 
         @live
         def free_result():

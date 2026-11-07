@@ -140,7 +140,7 @@ def _groq(audio, mime):
         r = requests.post(
             "https://api.groq.com/openai/v1/audio/transcriptions",
             headers={"Authorization": f"Bearer {groq_key()}"},
-            files={"file": ("speech.wav", audio, mime)},
+            files={"file": ("speech." + mime.split("/")[-1], audio, mime)},
             data={"model": _setting("GROQ_MODEL", "whisper-large-v3"), "language": "ko",
                   "temperature": "0", "response_format": "json"},
             timeout=60)

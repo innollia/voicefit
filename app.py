@@ -10,6 +10,7 @@ import stt
 
 st.set_page_config(page_title="내 목소리 맞춤 인식", page_icon="🎙️", layout="centered")
 s = st.session_state
+LIVE_URL = "https://promote-beverage-veterinary-brunette.trycloudflare.com/"  # 터널을 다시 켜면 바꾼다
 EXAMPLE = "내일 외의는 하교에서 합니다."
 model =stt.stt_model()
 s.setdefault("profile", core.new_profile(model))
@@ -111,7 +112,8 @@ with st.sidebar:
 if s.get("demo"):
     st.info("지금은 지어낸 예시 데이터입니다. 실제 측정값이 아닙니다.")
 if not has_key:
-    st.warning("AI 키가 아직 설정되지 않아 녹음 인식은 꺼져 있습니다. "
+    st.link_button("녹음과 AI가 켜진 주소로 가기", LIVE_URL, type="primary")
+    st.warning("이 주소에는 AI 키가 없어 녹음 인식이 꺼져 있습니다. "
                "왼쪽의 **예시 데이터로 체험**을 누르면 학습, 효과 확인, 보정을 그대로 볼 수 있습니다.")
 
 learn_tab, eval_tab, use_tab = st.tabs(["1. 내 발음 학습", "2. 효과 확인", "3. 써 보기"])

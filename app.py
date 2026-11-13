@@ -14,7 +14,7 @@ import stt
 st.set_page_config(page_title="내 목소리 맞춤 인식", page_icon="🎙️", layout="centered")
 recorder_ui = components.declare_component("recorder", path=str(Path(__file__).parent / "components" / "recorder"))
 s = st.session_state
-LIVE_URL = "https://bull-give-broker-warned.trycloudflare.com/"  # 터널을 다시 켜면 바꾼다
+LIVE_URL = "https://voicefit.olmuse.app/"
 EXAMPLE = "내일 외의는 하교에서 합니다."
 model =stt.stt_model()
 s.setdefault("profile", core.new_profile(model))
@@ -206,6 +206,9 @@ if not has_key:
     st.warning("이 주소에는 AI 키가 없어 녹음 인식이 꺼져 있습니다. "
                "오른쪽 위 ⋮ 메뉴의 **예시 데이터로 체험**을 누르면 학습, 효과 확인, 보정을 그대로 볼 수 있습니다.")
 
+if has_key:
+    st.caption("내 발음 습관을 배워 음성 인식 오류를 줄이는 앱입니다. ① 아래 동의에 체크하고 ② 1번 탭에서 화면의 문장을 30개 읽은 뒤 "
+               "③ 2번 탭에서 새 문장 10개로 보정 전후 오류율을 비교합니다. 처음 녹음할 때 브라우저가 묻는 마이크 사용을 허용해 주세요.")
 agreed = has_key and st.checkbox("녹음한 음성을 인식을 위해 외부 AI 서비스로 보내는 데 동의합니다.", key="agree")
 learn_tab, eval_tab, use_tab = st.tabs(["1. 내 발음 학습", "2. 효과 확인", "3. 써 보기"])
 
